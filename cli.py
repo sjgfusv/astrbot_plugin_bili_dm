@@ -221,8 +221,6 @@ def cmd_tail(args: argparse.Namespace) -> None:
                     who = "我" if m["direction"] == "out" else (cfg.peer_name or str(cfg.peer_uid))
                     print(f"[{_fmt_ts(m['ts'])}] {who}：{m['text']}")
                 await asyncio.sleep(cfg.poll_interval)
-        except KeyboardInterrupt:
-            print("\n已退出")
         finally:
             await client.aclose()
 
@@ -319,7 +317,12 @@ def main(argv: list[str] | None = None) -> None:
     if not getattr(args, "cmd", None):
         parser.print_help()
         return
-    args.func(args)
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        # asyncio.run() 在 Ctrl+C 时会取消协程再向外抛 KeyboardInterrupt，
+        # 子协程内的 except 接不到，统一在这里收尾，避免栈追踪刷屏。
+        print("\n已退出")
 
 
 if __name__ == "__main__":
