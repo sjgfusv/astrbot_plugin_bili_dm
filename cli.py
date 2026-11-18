@@ -274,7 +274,38 @@ def build_parser() -> argparse.ArgumentParser:
     tp.add_argument("--data", default="", help="数据目录")
     tp.set_defaults(func=cmd_tail)
 
+    hp = sub.add_parser("help", help="显示帮助（help <命令> 看某个命令的详细用法）")
+    hp.add_argument("topic", nargs="?", default="", help="命令名，例如 serve / login / send")
+    hp.set_defaults(func=cmd_help)
+
     return p
+
+
+def cmd_help(args: argparse.Namespace) -> None:
+    """不带参数显示总览；带命令名显示该命令的详细参数。"""
+    parser = build_parser()
+    topic = (getattr(args, "topic", "") or "").strip()
+    if not topic:
+        parser.print_help()
+        print("\n典型流程：")
+        print("  python run.py login             # 扫码登录（通常只需一次）")
+        print("  python run.py peer <对方UID>    # 指定要聊天的人")
+        print("  python run.py serve             # 启动面板，浏览器开 http://127.0.0.1:8787/")
+        print("  python run.py serve --demo      # 不登录也能先看界面")
+        print("\n查看某个命令的详细用法：python run.py help <命令>")
+        return
+
+    # argparse 把子解析器挂在 _SubParsersAction 上，用它精确打印对应帮助
+    sub_action = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None,
+    )
+    choices = sub_action.choices if sub_action is not None else {}
+    if topic not in choices:
+        print(f"没有这个命令：{topic}")
+        print("可用命令：" + ", ".join(choices))
+        return
+    choices[topic].print_help()
 
 
 def main(argv: list[str] | None = None) -> None:

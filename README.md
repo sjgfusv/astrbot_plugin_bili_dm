@@ -241,5 +241,6 @@ python run.py serve          # http://127.0.0.1:8787/
 python run.py serve --demo   # 假数据预览
 ```
 
-CLI：`login` / `peer` / `status` / `send` / `tail` / `serve`。
+CLI：`login` / `peer` / `status` / `send` / `tail` / `serve` / `help`。
+敲 `python run.py help` 看总览，`python run.py help <命令>` 看某个命令的详细参数。
 OneBot：`POST /onebot`、`ws://127.0.0.1:8787/onebot/ws`（`send_private_msg` 等）。
