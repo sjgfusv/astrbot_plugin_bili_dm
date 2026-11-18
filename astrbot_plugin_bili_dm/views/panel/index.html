@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>B站私信面板</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- 左：账号 + 会话列表 -->
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <div class="brand-name">B站私信</div>
+        <div class="brand-sub">复用 AstrBot 适配器</div>
+      </div>
+    </div>
+
+    <div class="account-bar">
+      <div class="avatar sm" id="myAvatar">我</div>
+      <div class="identity-text">
+        <div class="name" id="myName">未就绪</div>
+        <div class="mid" id="myUid">—</div>
+      </div>
+      <span class="pill" id="statusPill">离线</span>
+    </div>
+
+    <div class="search-wrap">
+      <input id="search" type="search" placeholder="搜索会话" autocomplete="off" />
+    </div>
+
+    <div class="sessions" id="sessionList">
+      <div class="list-hint" id="listHint">还没有会话</div>
+    </div>
+
+    <div class="rail-actions">
+      <button class="btn ghost" id="btnRefreshSessions">刷新会话</button>
+      <button class="btn ghost" id="btnSettings">设置</button>
+    </div>
+
+    <div class="adapter-hint" id="adapterHint"></div>
+  </aside>
+
+  <!-- 中：聊天 -->
+  <main class="chat">
+    <header class="chat-head">
+      <div class="chat-title">
+        <div class="avatar sm" id="headAvatar">?</div>
+        <div>
+          <div class="chat-name" id="headName">选择左侧会话</div>
+          <div class="chat-sub" id="headSub">或从设置里指定一个人</div>
+        </div>
+      </div>
+      <div class="chat-head-right">
+        <span class="pill" id="peerPill" hidden></span>
+        <button class="icon-btn" id="btnPeerSettings" title="显示设置">⚙</button>
+      </div>
+    </header>
+
+    <div class="banner" id="banner" hidden></div>
+
+    <div class="thread" id="thread"></div>
+
+    <div class="emoji-panel" id="emojiPanel" hidden>
+      <div class="emoji-tabs">
+        <button type="button" class="emoji-tab active" data-tab="bili">B站表情</button>
+        <button type="button" class="emoji-tab" data-tab="local">本地表情</button>
+        <button type="button" class="icon-btn" id="btnCloseEmoji">✕</button>
+      </div>
+      <div class="emoji-body" data-body="bili">
+        <input class="emoji-search" id="emojiSearch" placeholder="搜索表情，如 笑" />
+        <div class="emoji-grid" id="biliEmotes"></div>
+      </div>
+      <div class="emoji-body" data-body="local" hidden>
+        <div class="emoji-toolbar">
+          <button type="button" class="btn" id="btnImportSticker">导入图片（jpg / gif …）</button>
+          <input type="file" id="stickerFile" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" multiple hidden />
+          <span class="emoji-tip" id="stickerTip">点图片直接发送</span>
+        </div>
+        <div class="emoji-grid" id="localStickers"></div>
+      </div>
+    </div>
+
+    <footer class="composer">
+      <textarea id="input" rows="1" placeholder="输入私信，Enter 发送，Shift+Enter 换行"></textarea>
+      <div class="composer-right">
+        <button type="button" class="icon-btn emoji-btn" id="btnEmoji" title="表情">☺</button>
+        <span class="count" id="count">0</span>
+        <button class="btn primary" id="btnSend">发送</button>
+      </div>
+    </footer>
+    <div class="composer-hint" id="sendError"></div>
+  </main>
+
+  <!-- 右：运行信息 -->
+  <aside class="side">
+    <section class="card">
+      <div class="card-label">运行信息</div>
+      <div class="kv">
+        <span>适配器</span>
+        <code id="adapterName">—</code>
+      </div>
+      <div class="kv">
+        <span>账号</span>
+        <code id="adapterUid">—</code>
+      </div>
+      <div class="kv">
+        <span>范围</span>
+        <code id="scopeText">—</code>
+      </div>
+      <div class="kv">
+        <span>数据</span>
+        <code id="runData" title="">—</code>
+      </div>
+      <div class="kv">
+        <span>统计</span>
+        <code id="runCount">—</code>
+      </div>
+      <div class="chips">
+        <span>bili_panel</span>
+        <span>只读复用</span>
+        <span>不额外轮询</span>
+      </div>
+      <details class="snippet">
+        <summary>说明</summary>
+        <pre id="noteText">面板通过你已启用的 bilibili 私信适配器收发消息。
+历史消息按需拉取（打开会话/点刷新），不常驻轮询。</pre>
+      </details>
+    </section>
+
+    <section class="card log-card">
+      <div class="card-label">
+        事件日志
+        <button class="link" id="btnClearLog">清空</button>
+      </div>
+      <div class="log" id="log"></div>
+    </section>
+  </aside>
+</div>
+
+<!-- 设置 -->
+<div class="modal-mask" id="modalMask" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="scope">显示范围</button>
+      </div>
+      <button class="icon-btn" id="btnCloseModal">✕</button>
+    </div>
+
+    <div class="tab-body" data-body="scope">
+      <div class="radio-row">
+        <label class="radio">
+          <input type="radio" name="scope" value="all" />
+          <span>显示所有会话</span>
+        </label>
+        <label class="radio">
+          <input type="radio" name="scope" value="single" />
+          <span>只显示指定的人</span>
+        </label>
+      </div>
+
+      <label class="field" id="peerField">
+        <span>对端 UID（选择「只显示指定的人」时必填）</span>
+        <input id="peerInput" type="number" placeholder="例如 12345678" />
+      </label>
+
+      <label class="field">
+        <span>打开会话时的自动刷新间隔（秒，最低 3）</span>
+        <input id="intervalInput" type="number" min="3" step="1" value="10" />
+      </label>
+
+      <p class="tip">切换范围不影响 AstrBot 的处理逻辑，只是决定面板里能看到哪些会话。</p>
+
+      <label class="switch-row">
+        <input type="checkbox" id="paletteSync" />
+        <span class="switch-text">
+          <span class="switch-title">跟随 AstrBot 调色盘</span>
+          <span class="switch-sub" id="paletteHint">面板底色透明、主色跟随壁纸取色</span>
+        </span>
+      </label>
+
+      <button class="btn primary block" id="btnSaveScope">保存</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

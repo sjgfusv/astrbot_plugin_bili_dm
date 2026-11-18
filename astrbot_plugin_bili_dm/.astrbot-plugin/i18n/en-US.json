@@ -1,0 +1,8 @@
+{
+  "views": {
+    "panel": {
+      "title": "DM Panel",
+      "description": "Read and send Bilibili direct messages, manage login and polling."
+    }
+  }
+}
