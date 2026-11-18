@@ -1,9 +1,18 @@
 # bili-dm
 
-B 站私信的 **AstrBot 面板插件**。
+B 站私信的 **AstrBot 面板插件**（MIT 协议）。
 
 它不自己登录、不自己轮询——挂在你已经装好的 `bilibili` 私信适配器上，
-在 Dashboard 里给你一个聊天界面：会话列表、历史消息、直接回复。
+在 Dashboard 里给你一个聊天界面：会话列表、历史消息、直接回复、表情与视频卡片。
+
+**特性**
+
+- 多会话列表 + 历史消息 + 实时新消息，打开就停在最新一条
+- 文本私信、B 站表情、本地图片表情（jpg / gif / png …）
+- 视频分享显示成 B 站官方样式卡片，点击打开视频
+- 跟随 [AstrBot 调色盘](https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_palette)：透明底、玻璃表面、主色联动
+- 自己用面板发的消息不会重复显示；自己不会被当成会话
+- 支持独立运行模式（不装 AstrBot 也能预览，带 OneBot 11 接口）
 
 > 前提：AstrBot 里已经启用了一个 B 站私信适配器（例如 `astrbot_plugin_bilibili_adapter`）。
 > 面板只是它的「前端」，不改变 AstrBot 收发消息的逻辑。
@@ -12,11 +21,26 @@ B 站私信的 **AstrBot 面板插件**。
 
 需要 **AstrBot >= 4.29**。
 
+从 GitHub 安装：
+
+```bash
+git clone https://github.com/sjgfusv/temp-repository.git
+# 把 astrbot_plugin_bili_dm/ 整个目录复制到 AstrBot 的 data/plugins/ 下
+# 注意：必须是真实目录，不能用目录联接 / 符号链接（见下方说明）
+```
+
+然后在 WebUI「插件」页点一下该插件的「重载」，刷新 Dashboard，
+左侧「扩展功能」组里会出现 **B站私信面板 → 私信面板**。
+
+### 在本仓库里开发
+
 源码在本目录的 `astrbot_plugin_bili_dm/`，AstrBot 的 `data/plugins/` 里放的是
 **真实拷贝**。改完源码跑一次同步，再到 WebUI 点插件「重载」：
 
 ```bash
 python sync_to_astrbot.py        # 或双击 sync_to_astrbot.bat
+# 自定义 AstrBot 安装位置：
+ASTRBOT_DIR=/path/to/astrbot python sync_to_astrbot.py
 ```
 
 **为什么不能用目录联接**：AstrBot 的插件页面发现会先 `Path.resolve()` 插件目录，
@@ -147,8 +171,9 @@ GET /astrbot_plugin_bili_dm/theme  ──bridge──▶  面板按参数写 CSS
 
 ```
 data/plugin_data/astrbot_plugin_bili_dm/
-├── config.json   # 显示范围、对端 UID、刷新间隔
-└── messages.db   # 面板自己的消息/会话缓存（可删，删了重新拉）
+├── config.json   # 显示范围、对端 UID、刷新间隔、本人名片（无 Cookie）
+├── messages.db   # 面板自己的消息/会话缓存（可删，删了重新拉）
+└── stickers/     # 本地导入的图片表情（index.json + 图片文件）
 ```
 
 不含 Cookie —— Cookie 始终在 AstrBot 的平台配置里，面板只借用适配器的客户端。
@@ -158,8 +183,10 @@ data/plugin_data/astrbot_plugin_bili_dm/
 - 依赖 AstrBot >= 4.29（插件视图 `views/` + `astrbot.api.web`）
 - 依赖那个 bilibili 适配器暴露的 `client`（`get_messages` / `send_text_message` / `get_new_sessions`）。
   如果换适配器版本改了方法名，面板会提示「适配器还没就绪」，改 `bridge.py` 里的取用方式即可。
-- 非官方接口，B 站风控与适配器本身相同；面板不增加请求频率。
-- 只发文本（图片仅展示）。
+- 图片表情需要适配器提供 `upload_image()` + `send_image_message()`；没有这两个方法的适配器仍可正常发文本。
+- 非官方接口，B 站风控与适配器本身相同；面板不增加轮询请求。
+- 视频卡片不显示时长和播放量（原始分享数据里没有，需额外调 B 站接口）。
+- AstrBot 默认禁止插件 iframe 弹窗，视频卡片想开新标签需运行 `patch_astrbot_popups.py`；详见上文。
 
 ## 目录
 
@@ -170,22 +197,29 @@ bili-dm/
 │   ├── main.py                      # Star：Web API + 事件监听 + /bili_panel
 │   ├── service.py                   # 面板业务：会话/历史/发送
 │   ├── bridge.py                    # 桥接现有适配器（找实例、取客户端、解析原始消息）
-│   ├── core/                        # store / config / user(名片缓存)
+│   ├── core/                        # store / config / user / emotes / stickers / palette …
 │   ├── views/panel/                 # 前端（原生 HTML/CSS/JS）
 │   └── .astrbot-plugin/i18n/        # 视图标题
 ├── local/                           # 独立运行模式（可选，不需要 AstrBot）
 ├── cli.py, run.py                   # 独立运行入口
+├── sync_to_astrbot.py               # 开发用：源码同步到 AstrBot 插件目录
+├── patch_astrbot_popups.py          # 可选：给插件 iframe 加 allow-popups
+├── preview*.png                     # 界面预览图
 └── tests/                           # 冒烟测试（含 AstrBot API 桩）
 ```
 
 ## 开发 / 自测
 
 ```bash
-python tests/smoke_plugin.py     # 34 项：桥接、会话、解析、发送、范围、SSE
+python tests/smoke_plugin.py     # 75 项：桥接、会话、发送、调色盘、表情、时间戳兼容、SSE …
 python run.py serve --demo       # 独立模式预览界面（假数据）
 ```
 
-`tests/fake_astrbot/` 是按 AstrBot 4.29.4 源码复刻的最小 API 桩。
+`tests/fake_astrbot/` 是按 AstrBot 4.29.4 源码复刻的最小 API 桩，不联网、不碰真实数据目录。
+
+## 许可
+
+[MIT](LICENSE) — 可自由使用、修改、分发，保留版权声明即可。
 
 ## 附：独立运行模式（不使用 AstrBot）
 

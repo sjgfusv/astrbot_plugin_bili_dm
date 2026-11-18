@@ -24,7 +24,7 @@ B 站私信的 **AstrBot 面板插件**（MIT 协议）。
 从 GitHub 安装：
 
 ```bash
-git clone https://github.com/sjgfusv/astrbot_plugin_bili_dm.git
+git clone https://github.com/sjgfusv/temp-repository.git
 # 把 astrbot_plugin_bili_dm/ 整个目录复制到 AstrBot 的 data/plugins/ 下
 # 注意：必须是真实目录，不能用目录联接 / 符号链接（见下方说明）
 ```
