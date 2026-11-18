@@ -20,6 +20,7 @@ const S = {
   palette: null,
   atBottom: true,
   emotes: null,
+  emoteMap: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -366,7 +367,7 @@ function bubbleNode(msg) {
   } else {
     const card = videoCardFromRaw(msg.raw);
     if (!card) {
-      bubble.textContent = msg.text;
+      renderTextWithEmotes(bubble, msg.text);
     } else {
       bubble.classList.add("card-bubble");
       const link = document.createElement("a");
@@ -660,6 +661,62 @@ function startTimer() {
 }
 
 /* ---------------- 表情 ---------------- */
+// 表情名 → 图片 URL。B站私信里表情是 [doge_金箍] 这种文本转义符，
+// 官方客户端会渲染成图，这里用同步到的表情包数据做同样的替换。
+function buildEmoteMap() {
+  const map = new Map();
+  const add = (key, url) => {
+    const k = String(key || "").trim();
+    if (k && url && !map.has(k)) map.set(k, url);
+  };
+  for (const pkg of (S.emotes && S.emotes.packages) || []) {
+    for (const item of pkg.items || []) {
+      const url = String(item.url || "").replace(/^http:/i, "https:");
+      if (!url) continue;
+      add(item.text, url);
+      // alias 可能是 "笑,大笑" 这类逗号分隔的多个名字
+      for (const a of String(item.alias || "").split(/[,，]/)) add(a, url);
+    }
+  }
+  S.emoteMap = map;
+}
+
+// 把纯文本里的 [表情名] 换成内联图片，其余部分保持文本节点（不走 HTML 拼接，防注入）。
+function renderTextWithEmotes(el, text) {
+  const map = S.emoteMap;
+  if (!map || !map.size) {
+    el.textContent = text;
+    return;
+  }
+  const re = /\[([^\[\]]{1,32})\]/g;
+  let last = 0;
+  let match;
+  let replaced = false;
+  while ((match = re.exec(text)) !== null) {
+    const url = map.get(match[0]);
+    if (!url) continue;
+    if (match.index > last) {
+      el.appendChild(document.createTextNode(text.slice(last, match.index)));
+    }
+    const img = document.createElement("img");
+    img.className = "emote-inline";
+    img.src = url;
+    img.alt = match[0];
+    img.title = match[1];
+    img.referrerPolicy = "no-referrer";
+    img.loading = "lazy";
+    img.addEventListener("load", () => { if (S.atBottom) scrollThreadToBottom("smooth"); });
+    el.appendChild(img);
+    last = match.index + match[0].length;
+    replaced = true;
+  }
+  if (!replaced) {
+    el.textContent = text;
+    return;
+  }
+  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+}
+
 function insertEmoteText(text) {
   const input = $("input");
   const start = input.selectionStart ?? input.value.length;
@@ -680,11 +737,25 @@ function toggleEmojiPanel(show) {
 async function loadEmotes() {
   try {
     S.emotes = await Api.get("emotes");
+    buildEmoteMap();
+    // 表情数据到手后，把已经渲染的纯文本气泡里的表情码换成图片
+    refreshEmoteBubbles();
     renderBiliEmotes();
     renderLocalStickers();
     if (S.emotes.error) $("emojiSearch").title = S.emotes.error;
   } catch (err) {
     $("stickerTip").textContent = `表情加载失败：${err.message}`;
+  }
+}
+
+// 只重画含表情码的文本气泡，不动图片/视频卡片，也不重置滚动位置
+function refreshEmoteBubbles() {
+  if (!S.emoteMap || !S.emoteMap.size) return;
+  for (const wrap of $("thread").querySelectorAll(".bubble:not(.card-bubble)")) {
+    const msg = S.messages.find((m) => String(m.id) === wrap.dataset.id);
+    if (!msg || msg.kind === "image" || !/\[[^\[\]]{1,32}\]/.test(msg.text || "")) continue;
+    wrap.textContent = "";
+    renderTextWithEmotes(wrap, msg.text);
   }
 }
 
@@ -1049,6 +1120,8 @@ async function boot() {
 
   try {
     await loadState();
+    // 静默拉一次表情：历史消息里的表情码也要渲染成图片，不必等用户点开面板
+    void loadEmotes();
     await refreshPalette();
     await loadSessions();
     if (new URLSearchParams(location.search).get("nosse") !== "1") {

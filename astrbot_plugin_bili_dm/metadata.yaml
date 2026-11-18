@@ -7,7 +7,7 @@ desc: >-
   不额外轮询），在 Dashboard 里查看会话列表、历史消息并直接回复。
   显示范围可在面板设置里切换「所有会话 / 只看指定的人」。
   可选跟随 AstrBot 调色盘：透明底、玻璃表面、主色联动。
-version: v0.4.0
+version: v0.4.1
 author: bili-dm
 repo: "https://github.com/sjgfusv/astrbot_plugin_bili_dm"
 astrbot_version: ">=4.29.0"

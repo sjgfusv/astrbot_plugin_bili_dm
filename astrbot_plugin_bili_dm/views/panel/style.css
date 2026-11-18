@@ -1063,3 +1063,14 @@ html[data-palette="on"] .emoji-panel {
   border-color: var(--pal-line);
   backdrop-filter: blur(var(--pal-blur)) saturate(1.08);
 }
+
+/* 消息里的内联表情：像官方那样嵌在文字行里 */
+.bubble img.emote-inline {
+  display: inline-block;
+  width: auto;
+  height: 20px;
+  max-width: none;
+  margin: 0 1px;
+  vertical-align: -4px;
+  border-radius: 0;
+}
