@@ -8,5 +8,5 @@ desc: >-
   可选跟随 AstrBot 调色盘：透明底、玻璃表面、主色联动。
 version: v0.4.0
 author: bili-dm
-repo: "https://github.com/sjgfusv/temp-repository"
+repo: "https://github.com/sjgfusv/astrbot_plugin_bili_dm"
 astrbot_version: ">=4.29.0"
