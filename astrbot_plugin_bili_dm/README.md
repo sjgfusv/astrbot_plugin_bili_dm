@@ -14,14 +14,22 @@ B 站私信的 **AstrBot 面板插件**（MIT 协议）。
 - 自己用面板发的消息不会重复显示；自己不会被当成会话
 - 支持独立运行模式（不装 AstrBot 也能预览，带 OneBot 11 接口）
 
-> 前提：AstrBot 里已经启用了一个 B 站私信适配器（例如 `astrbot_plugin_bilibili_adapter`）。
-> 面板只是它的「前端」，不改变 AstrBot 收发消息的逻辑。
+> **插件模式的前提**：AstrBot 里必须先安装并启用一个 B 站私信适配器，例如
+> [astrbot_plugin_bilibili_adapter](https://github.com/Hina-Chat/astrbot_plugin_bilibili_adapter)。
+> 本插件只是给它配一个 WebUI「前端」，复用它已经登录好的客户端，不重复登录、不额外轮询，
+> 也不改变 AstrBot 收发消息的逻辑。
+>
+> **没有 AstrBot 或不想装适配器**：可以用仓库自带的「独立运行模式」，扫码登录并自带轮询，
+> 见文末「附：独立运行模式」。
 
 ## 安装
 
 需要 **AstrBot >= 4.29**。
 
-从 GitHub 安装：
+从 GitHub 安装（插件模式）：
+
+0. 先安装并启用 [Bilibili 私信适配器](https://github.com/Hina-Chat/astrbot_plugin_bilibili_adapter)，
+   在「配置 → 消息平台」里完成 Cookie 登录。没装的话面板会提示「适配器还没就绪」。
 
 ```bash
 git clone https://github.com/sjgfusv/astrbot_plugin_bili_dm.git
