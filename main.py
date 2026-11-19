@@ -38,7 +38,7 @@ def plugin_data_dir() -> Path:
     PLUGIN_NAME,
     "bili-dm",
     "B 站私信面板：复用现有 bilibili 适配器，在 WebUI 里查看和回复私信",
-    "0.4.2",
+    "0.4.3",
 )
 class BiliDmPanelPlugin(Star):
     def __init__(self, context: Context) -> None:

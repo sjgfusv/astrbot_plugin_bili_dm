@@ -12,7 +12,7 @@
 
 **它是什么**：AstrBot 的 B 站私信面板插件（`astrbot_plugin_bili_dm`）。不自己登录、不自己轮询，复用用户已启用的 `astrbot_plugin_bilibili_adapter` 客户端，在 Dashboard 里提供会话列表、历史消息、直接回复、表情、视频卡片。另有独立运行模式（`tools/local/` + `tools/cli.py` + `tools/run.py`），不装 AstrBot 也能用。
 
-**版本**：0.4.2（实时图片显示）。现在只有两处版本号：`main.py` 的 `@register(...)` 与仓库根目录 `metadata.yaml`，必须一致。
+**版本**：0.4.3（实时图片显示；v0.4.2 因插件市场「版本号已使用过」无法提交，故升号重提）。现在只有两处版本号：`main.py` 的 `@register(...)` 与仓库根目录 `metadata.yaml`，必须一致。
 
 **关键路径**
 
@@ -34,7 +34,7 @@
 3. WebUI 插件页点「重载」，Ctrl+F5 强刷 Dashboard
 4. `python tools/tests/smoke_plugin.py`（79 项）；改了前端再跑 `node --check views/panel/app.js`
 
-**发布循环**：本地 git commit → push（Windows 下需 `GIT_SSL_NO_VERIFY=1`）→ 需要发版时打 tag 并用 curl 调 GitHub Releases API（GitHub MCP 无建仓/发版权限）。v0.4.0、v0.4.1 的 Release 已建；本次改动发版为 v0.4.2，实际发布状态以仓库 tag / Release 为准。
+**发布循环**：本地 git commit → push（Windows 下需 `GIT_SSL_NO_VERIFY=1`）→ 需要发版时打 tag 并用 curl 调 GitHub Releases API（GitHub MCP 无建仓/发版权限）。v0.4.0～v0.4.3 的 Release 均已建。AstrBot Cloud 提交时若提示「该版本号已经使用过；即使版本已删除或撤回，也不能重复使用」，只能升号重提（v0.4.2 → v0.4.3），实际发布状态以仓库 tag / Release 为准。
 
 ---
 
@@ -70,7 +70,7 @@ README 已按 `views/panel/style.css` 末尾的「完全透明覆盖」规则改
 
 ### 3. 确认 AstrBot Cloud 审核状态【待用户本人操作】
 
-**现状**：仓库信息、logo、`metadata.yaml` 此前已补全并推送；v0.4.0 / v0.4.1 Release 已建。新结构与 v0.4.2 需推送后 Cloud 才能拿到，以实际安装结果为准。
+**现状**：仓库信息、logo、`metadata.yaml` 已补全并推送；v0.4.0～v0.4.3 Release 已建。Cloud 提交页在「确认发布」步骤因 v0.4.2 版本号被占用而失败，已升到 v0.4.3，需要重新打开提交页让平台重新解析 metadata。安装验证仍以实际结果为准。
 
 **要做的事**：
 
@@ -87,7 +87,7 @@ README 已按 `views/panel/style.css` 末尾的「完全透明覆盖」规则改
 
 分享视频卡片只显示封面 / 标题 / UP 主，这是**明确的决定，不是待办**。原始分享数据里没有时长和播放量，要显示得额外调 B 站接口，而插件刻意不增加请求量。若以后有人提出，直接说明「按设计不支持」，不用再评估。
 
-#### 4.2 实时收到的图片显示 —— 已实现（v0.4.2）
+#### 4.2 实时收到的图片显示 —— 已实现（v0.4.2 引入）
 
 适配器会把私信图片下载成 bytes 交给 AstrBot，消息链里没有 URL；但它在 `abm.raw_message` 里保留了原始私信数据。`service.py` 现在从那里取回 `content.url`，只接受 https + B 站图片域名（`.biliimg.com` / `.hdslb.com`），存成 `kind="image"` + URL，前端按历史图片同样的方式渲染；取不到就退回 `[图片]`，`<img>` 加载失败（鉴权/过期）也会回退成 `[图片]`。
 
