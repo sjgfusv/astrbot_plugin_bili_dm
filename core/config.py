@@ -15,7 +15,7 @@ from pathlib import Path
 PLUGIN_NAME = "astrbot_plugin_bili_dm"
 
 # 独立运行时的兜底目录（插件里会被 runtime 覆盖）
-DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

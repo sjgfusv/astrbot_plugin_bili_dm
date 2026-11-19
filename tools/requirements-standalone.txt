@@ -1,0 +1,5 @@
+# 独立运行模式（tools/run.py serve，不需要 AstrBot）
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.26
+qrcode>=7.4

@@ -1,6 +1,6 @@
 """插件冒烟测试（面板模式）：用 AstrBot API 桩 + 假适配器验证桥接逻辑。
 
-跑法：python tests/smoke_plugin.py
+跑法：python tools/tests/smoke_plugin.py
 不联网、不碰真实数据目录。
 """
 
@@ -16,12 +16,14 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
+TOOLS = ROOT / "tools"
 DATA = Path(tempfile.mkdtemp(prefix="fake_astrbot_"))
 os.environ["FAKE_ASTRBOT_DATA"] = str(DATA)
 
-sys.path.insert(0, str(ROOT / "tests" / "fake_astrbot"))
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(TOOLS))
+sys.path.insert(0, str(TOOLS / "tests" / "fake_astrbot"))
+import _bootstrap  # noqa: E402  仓库根目录即插件目录，注册包别名
 
 from astrbot.api.event import AstrMessageEvent  # noqa: E402
 from astrbot.api.platform import (  # noqa: E402
@@ -212,6 +214,38 @@ async def main() -> None:
     before = plugin.svc.store.count()
     await plugin.on_platform_message(other)
     check(plugin.svc.store.count() == before, "非 bilibili 事件不记录")
+
+    print("\n[5b] 实时图片取回原始 URL")
+
+    class Image:
+        pass
+
+    def image_event(key: str, raw: object) -> AstrMessageEvent:
+        ab = AstrBotMessage()
+        ab.message_str = "[图片]"
+        ab.sender = MessageMember(user_id=str(PEER), nickname="小林")
+        ab.timestamp = 1700000500
+        ab.message_id = key
+        ab.session_id = str(PEER)
+        ab.message = [Image()]
+        ab.raw_message = raw
+        return AstrMessageEvent("[图片]", ab, adapter.meta(), str(PEER))
+
+    good_url = "https://i0.hdslb.com/bfs/private/a.jpg"
+    raw_good = {"msg_type": 2, "content": json.dumps({"url": good_url})}
+    saved_img = plugin.svc.record_inbound(image_event("m-img-1", raw_good))
+    check(bool(saved_img and saved_img["text"] == good_url), "实时图片取回原始 URL")
+    check(saved_img["kind"] == "image", "图片类型仍是 image")
+
+    raw_bad = {
+        "msg_type": 2,
+        "content": json.dumps({"url": "https://evil.example/a.jpg"}),
+    }
+    saved_bad = plugin.svc.record_inbound(image_event("m-img-2", raw_bad))
+    check(bool(saved_bad and saved_bad["text"] == "[图片]"), "非 B 站域名不给浏览器加载")
+
+    saved_no_raw = plugin.svc.record_inbound(image_event("m-img-3", None))
+    check(bool(saved_no_raw and saved_no_raw["text"] == "[图片]"), "没有 raw_message 时退回占位")
 
     print("\n[6] 显示范围：只看一个人")
     request.set_state(body={"scope": "single", "peer_uid": 777, "panel_refresh": 12})

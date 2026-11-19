@@ -24,8 +24,8 @@ from astrbot_plugin_bili_dm.core.runtime import MODE_STANDALONE, BiliRuntime
 
 from .onebot import build_event, handle_action, heartbeat_event, lifecycle_event
 
-ROOT = Path(__file__).resolve().parent.parent
-VIEW_DIR = ROOT / "astrbot_plugin_bili_dm" / "views" / "panel"
+ROOT = Path(__file__).resolve().parent.parent.parent
+VIEW_DIR = ROOT / "views" / "panel"
 
 
 def create_app(rt: BiliRuntime, host: str, port: int) -> FastAPI:

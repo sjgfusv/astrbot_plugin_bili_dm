@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import json
 import time
+from urllib.parse import urlsplit
 
 from astrbot.api import logger
 
@@ -17,6 +19,39 @@ from .core.stickers import StickerStore
 from .core.poller import EventBus
 from .core.store import Store
 from .core.user import fetch_card
+
+# 与 bilibili 适配器一致：只允许把 B 站自有图片域名交给浏览器加载。
+BILI_IMAGE_HOSTS = (".biliimg.com", ".hdslb.com")
+IMAGE_PLACEHOLDER = "[图片]"
+
+
+def trusted_image_url(value: object) -> str:
+    """只接受 https 的 B 站图片地址，避免 raw_message 被塞进外部 URL。"""
+    url = str(value or "").strip()
+    if not url.lower().startswith("https://"):
+        return ""
+    try:
+        host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return ""
+    if not any(host.endswith(suffix) for suffix in BILI_IMAGE_HOSTS):
+        return ""
+    return url
+
+
+def image_url_from_raw(raw: object) -> str:
+    """适配器把原始消息保留在 raw_message，图片 URL 只在这里面。"""
+    if not isinstance(raw, dict):
+        return ""
+    content = raw.get("content")
+    if isinstance(content, str):
+        try:
+            content = json.loads(content)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+    if not isinstance(content, dict):
+        return ""
+    return trusted_image_url(content.get("url") or content.get("image_url"))
 
 
 class PanelService:
@@ -374,11 +409,16 @@ class PanelService:
         kind = "text"
         if not text:
             text, kind = "[非文本消息]", "other"
-        # 图片会被适配器转成 bytes，这里只能给占位
-        for comp in getattr(getattr(event, "message_obj", None), "message", []) or []:
+        # 适配器把图片下载成 bytes 交给 AstrBot，消息链里没有 URL；
+        # 但 raw_message 保留了原始私信数据，可取回 URL 让前端直接渲染。
+        message_obj = getattr(event, "message_obj", None)
+        for comp in getattr(message_obj, "message", []) or []:
             if type(comp).__name__.lower() == "image":
                 kind = "image"
-                text = "[图片]"
+                text = (
+                    image_url_from_raw(getattr(message_obj, "raw_message", None))
+                    or IMAGE_PLACEHOLDER
+                )
                 break
 
         # 分享卡片在 AstrBot 事件里只剩纯文字，封面/作者/链接都丢了。

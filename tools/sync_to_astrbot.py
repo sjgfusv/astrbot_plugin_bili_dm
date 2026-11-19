@@ -1,6 +1,10 @@
-"""把工作区里的插件源码同步到 AstrBot 插件目录。
+"""把仓库根目录当作插件目录，同步到 AstrBot 的 data/plugins/。
 
-为什么要复制，而不是继续用目录联接：
+仓库结构在 2026-11-19 改成「根目录即插件目录」（Cloud 安装要求）：main.py、
+core/、views/、metadata.yaml 都在仓库根，独立运行/开发工具在 tools/。
+所以这里的 SRC 是仓库根，且必须排除 tools/、.workbuddy/ 等非插件内容。
+
+为什么是复制，而不是目录联接：
 AstrBot 的插件页面发现（dashboard/services/plugin_page_service.py）会先
 ``Path.resolve()`` 插件目录，再 ``relative_to(plugin_store_path)``。
 目录联接会被解析到工作区路径，这一步直接抛 ValueError，结果 ``views/``
@@ -8,8 +12,8 @@ AstrBot 的插件页面发现（dashboard/services/plugin_page_service.py）会�
 真实目录，工作区继续作为源码，改完跑一次本脚本即可。
 
 用法：
-    python sync_to_astrbot.py
-    python sync_to_astrbot.py --clean     # 连目标里已删除的文件一起清掉
+    python tools/sync_to_astrbot.py
+    python tools/sync_to_astrbot.py --clean     # 连目标里已删除的文件一起清掉
 """
 
 from __future__ import annotations
@@ -21,13 +25,14 @@ import shutil
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-SRC = HERE / "astrbot_plugin_bili_dm"
+TOOLS = Path(__file__).resolve().parent
+SRC = TOOLS.parent
 
 # 默认本机路径；换机器时用 ASTRBOT_DIR 指向 AstrBot 根目录即可
 _ASTRBOT_DIR = os.environ.get("ASTRBOT_DIR", r"D:\astrbot")
 DEFAULT_DST = Path(_ASTRBOT_DIR) / "data" / "plugins" / "astrbot_plugin_bili_dm"
-SKIP_DIRS = {"__pycache__", ".pytest_cache"}
+SKIP_DIRS = {"__pycache__", ".pytest_cache", ".git", ".workbuddy", "tools", "data", ".venv"}
+SKIP_FILES = {".gitignore", "HANDOFF.md"}
 
 
 def iter_files(root: Path):
@@ -36,6 +41,8 @@ def iter_files(root: Path):
             continue
         rel = path.relative_to(root)
         if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if rel.name in SKIP_FILES:
             continue
         yield path
 
@@ -56,8 +63,8 @@ def main() -> int:
     args = parser.parse_args()
 
     dst = Path(args.dst)
-    if not SRC.is_dir():
-        print(f"源码目录不存在：{SRC}", file=sys.stderr)
+    if not (SRC / "main.py").is_file() or not (SRC / "metadata.yaml").is_file():
+        print(f"插件根目录不完整（缺 main.py / metadata.yaml）：{SRC}", file=sys.stderr)
         return 1
     if is_link(dst):
         print(
@@ -93,7 +100,7 @@ def main() -> int:
                 removed += 1
 
     print(f"同步完成：{copied} 个更新，{unchanged} 个未变，删除 {removed} 个")
-    print(f"  源码：{SRC}")
+    print(f"  源码：{SRC}（仓库根即插件目录）")
     print(f"  目标：{dst}")
     print("改完插件后运行本脚本，再到 WebUI 点一次插件「重载」。")
     return 0

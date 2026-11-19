@@ -10,7 +10,7 @@ B 站私信的 **AstrBot 面板插件**。
 - 多会话列表 + 历史消息 + 实时新消息，打开就停在最新一条
 - 文本私信、B 站表情、本地图片表情（jpg / gif / png …）
 - 视频分享显示成 B 站官方样式卡片，点击打开视频
-- 跟随 [AstrBot 调色盘](https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_palette)：透明底、玻璃表面、主色联动
+- 跟随 [AstrBot 调色盘](https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_palette)：卡片完全透明、壁纸原样透出、主色联动
 - 自己用面板发的消息不会重复显示；自己不会被当成会话
 - 支持独立运行模式（不装 AstrBot 也能预览，带 OneBot 11 接口）
 
@@ -20,7 +20,7 @@ B 站私信的 **AstrBot 面板插件**。
 > 也不改变 AstrBot 收发消息的逻辑。
 >
 > **没有 AstrBot 或不想装适配器**：可以用仓库自带的「独立运行模式」，扫码登录并自带轮询，
-> 见文末「附：独立运行模式」。
+> 见文末「附：独立运行模式（不使用 AstrBot）」。
 
 ## 安装
 
@@ -33,23 +33,31 @@ B 站私信的 **AstrBot 面板插件**。
 
 ```bash
 git clone https://github.com/sjgfusv/astrbot_plugin_bili_dm.git
-# 把 astrbot_plugin_bili_dm/ 整个目录复制到 AstrBot 的 data/plugins/ 下
+# 仓库根目录就是插件目录：把克隆下来的整个目录复制到 AstrBot 的 data/plugins/ 下，
+# 并把目录名改为 astrbot_plugin_bili_dm（与 metadata.yaml 的 name 一致）
 # 注意：必须是真实目录，不能用目录联接 / 符号链接（见下方说明）
 ```
+
+仓库根目录自带 `metadata.yaml` / `main.py` / `core/` / `views/`，Cloud 安装会直接把这个
+根目录装成插件；独立运行与开发工具放在 `tools/`，不参与插件加载。
 
 然后在 WebUI「插件」页点一下该插件的「重载」，刷新 Dashboard，
 左侧「扩展功能」组里会出现 **B站私信面板 → 私信面板**。
 
 ### 在本仓库里开发
 
-源码在本目录的 `astrbot_plugin_bili_dm/`，AstrBot 的 `data/plugins/` 里放的是
-**真实拷贝**。改完源码跑一次同步，再到 WebUI 点插件「重载」：
+源码就在仓库根目录（`main.py` / `service.py` / `bridge.py` / `core/` / `views/`），
+AstrBot 的 `data/plugins/astrbot_plugin_bili_dm/` 里放的是**真实拷贝**。
+改完源码跑一次同步，再到 WebUI 点插件「重载」：
 
 ```bash
-python sync_to_astrbot.py        # 或双击 sync_to_astrbot.bat
+python tools/sync_to_astrbot.py        # 或双击 tools/sync_to_astrbot.bat
 # 自定义 AstrBot 安装位置：
-ASTRBOT_DIR=/path/to/astrbot python sync_to_astrbot.py
+ASTRBOT_DIR=/path/to/astrbot python tools/sync_to_astrbot.py
 ```
+
+同步脚本以仓库根为源码目录，自动排除 `tools/`、`.workbuddy/`、`data/`、`.git/` 等非插件内容；
+加 `--clean` 可一并删除目标里已经不存在的旧文件。
 
 **为什么不能用目录联接**：AstrBot 的插件页面发现会先 `Path.resolve()` 插件目录，
 再 `relative_to(plugin_store_path)`；联接会被解析到工作区路径，这一步抛
@@ -57,7 +65,7 @@ ASTRBOT_DIR=/path/to/astrbot python sync_to_astrbot.py
 （报错「未找到该插件可视化视图」）。所以 AstrBot 那边必须是真实目录。
 同步脚本会拒绝在联接上执行。
 
-依赖 `httpx` AstrBot 自带，`requirements.txt` 里已经写好。
+插件运行只需要 `httpx`（`requirements.txt`），AstrBot 自带；独立运行模式的额外依赖见 `tools/requirements-standalone.txt`。
 
 安装后刷新 WebUI：左侧「扩展功能」组里会出现 **B站私信面板 → 私信面板**；
 插件页的卡片上也有视图按钮。改了前端代码后要重载插件才能生效。
@@ -78,7 +86,7 @@ ASTRBOT_DIR=/path/to/astrbot python sync_to_astrbot.py
 | 显示所有会话 | 左侧列出所有给这个账号发过私信的人 |
 | 只显示指定的人 | 只显示你填的 UID，界面更干净（不影响 AstrBot 处理其它会话） |
 | 自动刷新间隔 | 打开某个会话时，每隔几秒拉一次这个会话的新消息，默认 10s |
-| 跟随 AstrBot 调色盘 | 面板底色透明、主色跟随壁纸取色，默认开 |
+| 跟随 AstrBot 调色盘 | 卡片背景完全透明，壁纸原样透出，默认开 |
 
 聊天里还能用 `/bili_panel` 查面板状态。
 
@@ -97,22 +105,22 @@ ASTRBOT_DIR=/path/to/astrbot python sync_to_astrbot.py
 
 ```
 data/config/astrbot_plugin_palette_config.json
-        │  core/palette.py 解析（主色 / 界面透明度 / 毛玻璃 / 文字增强 / 壁纸）
+        │  core/palette.py 解析（主色 / 文字增强 / 壁纸 / 界面透明度）
         ▼
 GET /astrbot_plugin_bili_dm/theme  ──bridge──▶  面板按参数写 CSS 变量
 ```
 
 | 调色盘设置 | 面板里的效果 |
 | --- | --- |
-| 启用 / 关闭 | 关掉就退回面板自己的配色，不残留玻璃效果 |
-| 主色 `theme_primary` | 替换品牌粉：按钮、发出的气泡、选中会话、角标 |
-| 界面底色强度 `surface_opacity` | 玻璃表面透明度（0.42/0.60 打底，随它上浮） |
-| 界面毛玻璃强度 `stats_card_blur` | 面板内部层的 `backdrop-filter` |
+| 启用 / 关闭 | 关掉就退回面板自己的配色，不残留透明效果 |
+| 主色 `theme_primary` | 替换品牌粉：按钮、发出的气泡、选中会话标识、角标 |
 | 文字增强模式 / 强度 | 正文的 `text-shadow`，壁纸上的可读性靠它兜底 |
+| 界面底色强度 `surface_opacity` | **不再影响面板**：面板内部卡片固定完全透明，这项只作用 Dashboard 父页面 |
+| 界面毛玻璃强度 `stats_card_blur` | **不再影响面板**：面板不模糊壁纸，这项只作用 Dashboard 父页面 |
 
-**一个物理限制**：`backdrop-filter` 不能跨文档采样父页面的壁纸，所以面板里的"玻璃"
-是「半透明 + 细边框 + 阴影」模拟的，壁纸在面板背后是清晰的、不会被面板再糊一层。
-这也是调色盘自己的插件页的做法。
+**当前观感**：按用户要求，调色盘模式下所有卡片表面已改为完全透明——壁纸原样透出，
+只保留细边框区分区域，可读性交给调色盘的文字增强。主色按钮和发出的气泡仍是实色。
+`backdrop-filter` 本身也不能跨文档采样父页壁纸，所以面板里不做「再糊一层壁纸」的模拟。
 
 调色盘改设置 / 换壁纸后，面板每 45 秒跟一次，也可以关掉面板重新打开。
 
@@ -167,13 +175,13 @@ GET /astrbot_plugin_bili_dm/theme  ──bridge──▶  面板按参数写 CSS
 - **分享视频做成卡片**：从原始分享数据还原封面、标题和 UP 主，样式接近 B 站官方卡片，
   点击卡片打开视频。封面用 `no-referrer` 绕开防盗链，加载失败时显示渐变占位。
   适配器转成 AstrBot 事件时只保留纯文字，所以实时分享会补拉一次历史拿完整数据。
-  原始分享数据里没有时长和播放量，要显示的话得额外调 B 站接口，目前没发这个请求。
+  原始分享数据里没有时长和播放量，按设计不支持显示，也不为此额外发请求。
 - **视频卡片在新标签打开**：AstrBot 默认给插件视图 iframe 的 `sandbox` 没有 `allow-popups`。
-  运行 `python patch_astrbot_popups.py` 可加上白名单，脚本会先备份 AstrBot 的原始 JS。
+  运行 `python tools/patch_astrbot_popups.py` 可加上白名单，脚本会先备份 AstrBot 的原始 JS。
   AstrBot 升级会覆盖这个改动，升级后重跑一次；改完 Ctrl+F5 强刷 Dashboard。
   没打补丁或弹窗被拦时，点击只会**复制链接并提示**，不会把面板跳到那个受限的视频页。
   （`window.open(..., "noopener")` 即使成功也返回 `null`，不能拿它判断弹窗是否被拦。）
-- **图片**：历史消息里保留原始 URL，面板直接渲染；适配器把新图片转成了 bytes，实时那条只能显示 `[图片]`，刷新一下就能看到图。
+- **图片**：历史消息保留原始 URL；实时消息会从适配器保留的原始消息里取回同一个 URL 直接渲染。只有取不到 URL（如非 B 站域名、图片 CDN 鉴权失败或链接过期）时才回退显示 `[图片]`，刷新会话可重新拿最新 URL。
 - **自己用面板发的消息**会立刻出现在界面；bot 在别的渠道（比如 AstrBot 对话里）发的回复，下次刷新会话时可见。
 
 ## 数据
@@ -194,37 +202,43 @@ data/plugin_data/astrbot_plugin_bili_dm/
   如果换适配器版本改了方法名，面板会提示「适配器还没就绪」，改 `bridge.py` 里的取用方式即可。
 - 图片表情需要适配器提供 `upload_image()` + `send_image_message()`；没有这两个方法的适配器仍可正常发文本。
 - 非官方接口，B 站风控与适配器本身相同；面板不增加轮询请求。
-- 视频卡片不显示时长和播放量（原始分享数据里没有，需额外调 B 站接口）。
-- AstrBot 默认禁止插件 iframe 弹窗，视频卡片想开新标签需运行 `patch_astrbot_popups.py`；详见上文。
+- 视频卡片不显示时长和播放量（原始分享数据里没有，需额外调 B 站接口；按设计不支持）。
+- AstrBot 默认禁止插件 iframe 弹窗，视频卡片想开新标签需运行 `tools/patch_astrbot_popups.py`；详见上文。
 
 ## 目录
 
 ```
-bili-dm/
-├── astrbot_plugin_bili_dm/          # ← 插件本体
-│   ├── metadata.yaml
-│   ├── main.py                      # Star：Web API + 事件监听 + /bili_panel
-│   ├── service.py                   # 面板业务：会话/历史/发送
-│   ├── bridge.py                    # 桥接现有适配器（找实例、取客户端、解析原始消息）
-│   ├── core/                        # store / config / user / emotes / stickers / palette …
-│   ├── views/panel/                 # 前端（原生 HTML/CSS/JS）
-│   └── .astrbot-plugin/i18n/        # 视图标题
-├── local/                           # 独立运行模式（可选，不需要 AstrBot）
-├── cli.py, run.py                   # 独立运行入口
-├── sync_to_astrbot.py               # 开发用：源码同步到 AstrBot 插件目录
-├── patch_astrbot_popups.py          # 可选：给插件 iframe 加 allow-popups
-├── preview*.png                     # 界面预览图
-└── tests/                           # 冒烟测试（含 AstrBot API 桩）
+bili-dm/                           ← 仓库根目录就是插件目录
+├── metadata.yaml / logo.png
+├── main.py                        # Star：Web API + 事件监听 + /bili_panel
+├── service.py                     # 面板业务：会话/历史/发送
+├── bridge.py                      # 桥接现有适配器（找实例、取客户端、解析原始消息）
+├── core/                          # store / config / user / emotes / stickers / palette …
+├── views/panel/                   # 前端（原生 HTML/CSS/JS）
+├── .astrbot-plugin/i18n/          # 视图标题
+├── requirements.txt               # 插件依赖（只有 httpx）
+├── tools/                         # 独立运行 + 开发工具，不参与插件加载
+│   ├── local/                     # 独立运行服务（FastAPI + OneBot 11）
+│   ├── cli.py / run.py            # 独立运行入口
+│   ├── tests/                     # 冒烟测试（含 AstrBot API 桩）
+│   ├── _bootstrap.py              # 让 tools/ 以仓库根作为插件包名导入
+│   ├── sync_to_astrbot.py         # 开发用：源码同步到 AstrBot 插件目录
+│   ├── patch_astrbot_popups.py    # 可选：给插件 iframe 加 allow-popups
+│   ├── requirements-standalone.txt
+│   └── preview*.png               # 界面预览图
+└── HANDOFF.md                     # 交接文档
 ```
 
 ## 开发 / 自测
 
 ```bash
-python tests/smoke_plugin.py     # 75 项：桥接、会话、发送、调色盘、表情、时间戳兼容、SSE …
-python run.py serve --demo       # 独立模式预览界面（假数据）
+python tools/tests/smoke_plugin.py     # 79 项：桥接、会话、发送、调色盘、表情、时间戳兼容、实时图片、SSE …
+python tools/run.py serve --demo       # 独立模式预览界面（假数据）
+node --check views/panel/app.js        # 前端改动后检查语法
 ```
 
-`tests/fake_astrbot/` 是按 AstrBot 4.29.4 源码复刻的最小 API 桩，不联网、不碰真实数据目录。
+`tools/tests/fake_astrbot/` 是按 AstrBot 4.29.4 源码复刻的最小 API 桩，不联网、不碰真实数据目录。
+`tools/_bootstrap.py` 把仓库根目录注册成 `astrbot_plugin_bili_dm` 包，所以源码里不用为本地运行改导入路径。
 
 ## 许可
 
@@ -235,13 +249,13 @@ python run.py serve --demo       # 独立模式预览界面（假数据）
 同一份前端也能脱离 AstrBot 跑，自带轮询与 OneBot 11 接口：
 
 ```bash
-pip install -r requirements.txt
-python run.py login          # 扫码登录
-python run.py peer 12345678  # 设置对端
-python run.py serve          # http://127.0.0.1:8787/
-python run.py serve --demo   # 假数据预览
+pip install -r tools/requirements-standalone.txt
+python tools/run.py login          # 扫码登录
+python tools/run.py peer 12345678  # 设置对端
+python tools/run.py serve          # http://127.0.0.1:8787/
+python tools/run.py serve --demo   # 假数据预览
 ```
 
 CLI：`login` / `peer` / `status` / `send` / `tail` / `serve` / `help`。
-敲 `python run.py help` 看总览，`python run.py help <命令>` 看某个命令的详细参数。
+敲 `python tools/run.py help` 看总览，`python tools/run.py help <命令>` 看某个命令的详细参数。
 OneBot：`POST /onebot`、`ws://127.0.0.1:8787/onebot/ws`（`send_private_msg` 等）。

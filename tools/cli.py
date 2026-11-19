@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 
+import _bootstrap  # noqa: E402  插件包名别名（仓库根目录即插件目录）
 from astrbot_plugin_bili_dm.core.bili import BiliClient, BiliError
 from astrbot_plugin_bili_dm.core.config import DEFAULT_DATA_DIR, Config
 from astrbot_plugin_bili_dm.core.login import QR_EXPIRED, QR_OK, QrLogin, render_qr_ascii
@@ -24,7 +25,7 @@ def _data_dir(args: argparse.Namespace) -> Path:
 
 def _require_login(cfg: Config) -> None:
     if not cfg.logged_in:
-        print("还没登录。先跑 `python run.py login` 扫码，或用 --cookie 粘贴浏览器 Cookie。")
+        print("还没登录。先跑 `python tools/run.py login` 扫码，或用 --cookie 粘贴浏览器 Cookie。")
         sys.exit(2)
 
 
@@ -105,7 +106,7 @@ async def _after_login(cfg: Config) -> None:
         if cfg.peer_uid:
             print(f"对端：{cfg.peer_name or cfg.peer_uid}（{cfg.peer_uid}）")
         else:
-            print("还没设置对端，跑 `python run.py peer <UID>` 指定要聊天的人")
+            print("还没设置对端，跑 `python tools/run.py peer <UID>` 指定要聊天的人")
     except BiliError as exc:
         print(f"登录信息校验失败：{exc}")
     finally:
@@ -163,7 +164,7 @@ def cmd_send(args: argparse.Namespace) -> None:
     cfg = _apply_common(Config.load(_data_dir(args)), args)
     _require_login(cfg)
     if not cfg.peer_uid:
-        print("还没设置对端，先跑 `python run.py peer <UID>`")
+        print("还没设置对端，先跑 `python tools/run.py peer <UID>`")
         sys.exit(2)
     text = " ".join(args.text) if args.text else ""
 
@@ -196,7 +197,7 @@ def cmd_tail(args: argparse.Namespace) -> None:
     cfg = _apply_common(Config.load(_data_dir(args)), args)
     _require_login(cfg)
     if not cfg.peer_uid:
-        print("还没设置对端，先跑 `python run.py peer <UID>`")
+        print("还没设置对端，先跑 `python tools/run.py peer <UID>`")
         sys.exit(2)
 
     async def flow() -> None:
@@ -286,11 +287,11 @@ def cmd_help(args: argparse.Namespace) -> None:
     if not topic:
         parser.print_help()
         print("\n典型流程：")
-        print("  python run.py login             # 扫码登录（通常只需一次）")
-        print("  python run.py peer <对方UID>    # 指定要聊天的人")
-        print("  python run.py serve             # 启动面板，浏览器开 http://127.0.0.1:8787/")
-        print("  python run.py serve --demo      # 不登录也能先看界面")
-        print("\n查看某个命令的详细用法：python run.py help <命令>")
+        print("  python tools/run.py login             # 扫码登录（通常只需一次）")
+        print("  python tools/run.py peer <对方UID>    # 指定要聊天的人")
+        print("  python tools/run.py serve             # 启动面板，浏览器开 http://127.0.0.1:8787/")
+        print("  python tools/run.py serve --demo      # 不登录也能先看界面")
+        print("\n查看某个命令的详细用法：python tools/run.py help <命令>")
         return
 
     # argparse 把子解析器挂在 _SubParsersAction 上，用它精确打印对应帮助

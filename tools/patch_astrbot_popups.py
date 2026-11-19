@@ -12,10 +12,10 @@ AstrBot 在 dashboard/dist/assets/PluginViewPage-*.js 里把 sandbox 写死了�
 - 不重启 AstrBot 一般也生效（静态文件按磁盘读取），不生效就重启一次。
 
 用法：
-    python patch_astrbot_popups.py
+    python tools/patch_astrbot_popups.py
     # 自定义 AstrBot 安装位置 / 包路径：
-    ASTRBOT_DIR=/path/to/astrbot python patch_astrbot_popups.py
-    ASTRBOT_PACKAGE=/path/to/site-packages/astrbot python patch_astrbot_popups.py
+    ASTRBOT_DIR=/path/to/astrbot python tools/patch_astrbot_popups.py
+    ASTRBOT_PACKAGE=/path/to/site-packages/astrbot python tools/patch_astrbot_popups.py
 """
 
 from __future__ import annotations

@@ -720,9 +720,8 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 
 /* ================= 调色盘（astrbot_plugin_palette）适配 ================= */
-/* 调色盘会把 Dashboard 的容器和 .plugin-view-frame 都设成透明，壁纸会直接透到
-   iframe 位置。跨文档没法对父页面做 backdrop-filter，所以这里用「半透明表面 +
-   细边框 + 阴影」模拟玻璃，可读性交给调色盘的文字增强参数。 */
+/* 调色盘模式下所有承载卡片的表面完全透明：壁纸原样透出，不加半透明底色、
+   不做模糊；只保留细边框划分区域，可读性交给调色盘的文字增强参数。 */
 
 html[data-palette="on"] {
   --bg: transparent;
@@ -1073,4 +1072,52 @@ html[data-palette="on"] .emoji-panel {
   margin: 0 1px;
   vertical-align: -4px;
   border-radius: 0;
+}
+
+/* ================= 完全透明覆盖（调色盘模式） =================
+   把所有承载卡片的「半透明底色 + 毛玻璃模糊」统一去掉：壁纸原样透出，
+   只留下细边框区分区域；可读性依旧交给调色盘的文字增强。放在文件末尾，
+   覆盖上面所有 var(--pal-soft)/var(--pal-strong) 与 backdrop-filter。 */
+html[data-palette="on"] .rail,
+html[data-palette="on"] .side,
+html[data-palette="on"] .card,
+html[data-palette="on"] .account-bar,
+html[data-palette="on"] .btn,
+html[data-palette="on"] .search-wrap input,
+html[data-palette="on"] .composer textarea,
+html[data-palette="on"] .tab-body textarea,
+html[data-palette="on"] .field input,
+html[data-palette="on"] .qr-box,
+html[data-palette="on"] .kv code,
+html[data-palette="on"] .chips span,
+html[data-palette="on"] .snippet pre,
+html[data-palette="on"] .tabs,
+html[data-palette="on"] .bubble,
+html[data-palette="on"] .day-sep span,
+html[data-palette="on"] .modal,
+html[data-palette="on"] .video-card,
+html[data-palette="on"] .emoji-panel {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* 主色按钮保持纯主色、发出气泡保持原渐变，都不被透明化 */
+html[data-palette="on"] .btn.primary { background: var(--pal-accent) !important; }
+html[data-palette="on"] .msg.out .bubble {
+  background: linear-gradient(135deg, var(--pal-accent), var(--pal-accent-deep)) !important;
+}
+/* 选中态、hover 也去掉底色，改用主色边框标识 */
+html[data-palette="on"] .session.active,
+html[data-palette="on"] .session:hover,
+html[data-palette="on"] .icon-btn:hover {
+  background: transparent !important;
+}
+html[data-palette="on"] .session.active { border-left: 2px solid var(--pal-accent); }
+/* 输入框聚焦时也不要半透明底，只保留主色描边 */
+html[data-palette="on"] .composer textarea:focus,
+html[data-palette="on"] .tab-body textarea:focus,
+html[data-palette="on"] .field input:focus,
+html[data-palette="on"] .search-wrap input:focus {
+  background: transparent !important;
+  box-shadow: 0 0 0 2px rgba(var(--pal-accent-rgb), .45);
 }

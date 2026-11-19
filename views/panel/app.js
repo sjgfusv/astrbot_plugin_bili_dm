@@ -363,6 +363,8 @@ function bubbleNode(msg) {
     img.referrerPolicy = "no-referrer";
     // 图片晚于消息渲染完成，高度变了要重新贴底（仅在用户本来就在底部时）
     img.addEventListener("load", () => { if (S.atBottom) scrollThreadToBottom("smooth"); });
+    // 私信 CDN 可能鉴权失败或链接过期：碎图时退回文字，别留个破图标
+    img.addEventListener("error", () => { bubble.textContent = "[图片]"; }, { once: true });
     bubble.appendChild(img);
   } else {
     const card = videoCardFromRaw(msg.raw);
