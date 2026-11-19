@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9dc2"/>
+      <stop offset="1" stop-color="#fb7299"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#bg)"/>
+  <!-- 对话气泡主体 -->
+  <path d="M128 54 C74 54 46 80 46 116 C46 152 74 178 118 178 C130 178 140 176 150 173 L184 192 L176 162 C199 149 210 130 210 112 C210 80 182 54 128 54 Z" fill="#fff"/>
+  <!-- B站天线（露在气泡上沿） -->
+  <path d="M100 40 L116 66 M156 40 L140 66" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 消息三点 -->
+  <circle cx="92" cy="114" r="10" fill="#fb7299"/>
+  <circle cx="128" cy="114" r="10" fill="#fb7299"/>
+  <circle cx="164" cy="114" r="10" fill="#fb7299"/>
+</svg>
