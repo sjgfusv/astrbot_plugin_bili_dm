@@ -205,24 +205,35 @@ class BiliClient:
             )
         return out
 
-    async def fetch_msgs(self, talker_id: int | None = None, size: int | None = None) -> list[dict]:
-        """拉取与对端的最新消息，按时间正序返回标准化后的列表。"""
+    async def fetch_msgs(
+        self,
+        talker_id: int | None = None,
+        size: int | None = None,
+        begin_seqno: int = 0,
+    ) -> list[dict]:
+        """拉取与对端的消息，按时间正序返回标准化后的列表。
+
+        begin_seqno 为 0 时拉最新一批；传某条消息的 msg_seqno 则往前翻更早的。
+        """
         cfg = self.cfg
         talker = int(talker_id or cfg.peer_uid)
         if not talker:
             raise BiliError(-400, "还没设置对端 UID", "拉取消息")
+        params = {
+            "talker_id": talker,
+            "session_type": 1,
+            "size": size or cfg.history_size,
+            "sender_device_id": 1,
+            "build": 0,
+            "mobi_app": "web",
+        }
+        if begin_seqno:
+            params["begin_seqno"] = int(begin_seqno)
         data = await self._request(
             "GET",
             f"{VC}/svr_sync/v1/svr_sync/fetch_session_msgs",
             action="拉取消息",
-            params={
-                "talker_id": talker,
-                "session_type": 1,
-                "size": size or cfg.history_size,
-                "sender_device_id": 1,
-                "build": 0,
-                "mobi_app": "web",
-            },
+            params=params,
         )
         out: list[dict] = []
         for m in data.get("messages") or []:

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 元数据与版本号
+        run: python tools/tests/check_version.py
+
+      - name: 冒烟测试
+        run: python tools/tests/smoke_plugin.py
+
+      - name: 前端语法检查
+        run: node --check views/panel/app.js
+
+      - name: Python 语法检查
+        run: python -m compileall -q main.py service.py bridge.py core views tools/local

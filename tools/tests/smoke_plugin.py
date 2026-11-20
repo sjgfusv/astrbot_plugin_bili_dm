@@ -40,6 +40,7 @@ from astrbot_plugin_bili_dm.core.config import PLUGIN_NAME  # noqa: E402
 PASS = 0
 MY_UID = 90001
 PEER = 555
+PAGED = 888  # 专门用来测上翻分页的会话
 
 
 def check(cond: bool, label: str) -> None:
@@ -50,14 +51,17 @@ def check(cond: bool, label: str) -> None:
     print(f"  ok  {label}")
 
 
-def text_msg(uid: int, text: str, ts: int, key: str) -> dict:
-    return {
+def text_msg(uid: int, text: str, ts: int, key: str, seqno: int = 0) -> dict:
+    raw = {
         "msg_type": 1,
         "sender_uid": uid,
         "timestamp": ts,
         "msg_key": key,
         "content": json.dumps({"content": text}, ensure_ascii=False),
     }
+    if seqno:
+        raw["msg_seqno"] = seqno
+    return raw
 
 
 class FakeClient:
@@ -68,19 +72,42 @@ class FakeClient:
         self.images: list[tuple[int, str]] = []
         self.messages = {
             PEER: [
-                text_msg(PEER, "你好，在吗", 1700000100, "k1"),
+                text_msg(PEER, "你好，在吗", 1700000100, "k1", seqno=100),
                 {
                     "msg_type": 2,
                     "sender_uid": MY_UID,
                     "timestamp": 1700000200,
                     "msg_key": "k2",
+                    "msg_seqno": 101,
                     "content": json.dumps({"url": "https://i0.hdslb.com/bfs/x.jpg"}),
                 },
             ]
         }
+        # 上翻历史用的更早一批：seqno 比上面小，仅在 begin_seqno 命中时返回
+        self.older = {
+            PEER: [
+                text_msg(PEER, "更早的一条", 1700000000, "k0", seqno=90),
+                text_msg(MY_UID, "最早的一条", 1699999900, "k00", seqno=91),
+            ]
+        }
+        # 专门的翻页会话：完全由测试控制，不和其他用例的历史混在一起
+        self.messages[PAGED] = [
+            text_msg(PEER, "翻页会话·较新", 1700000420, "pg2", seqno=201),
+            text_msg(PEER, "翻页会话·最新", 1700000500, "pg3", seqno=202),
+        ]
+        self.older[PAGED] = [
+            text_msg(PEER, "翻页会话·更早", 1700000300, "pg0", seqno=190),
+            text_msg(PEER, "翻页会话·更早二", 1700000350, "pg1", seqno=191),
+        ]
 
     async def get_messages(self, talker_id, session_type, begin_seqno, size=None):
-        return {"messages": self.messages.get(int(talker_id), [])}
+        peer = int(talker_id)
+        if begin_seqno:
+            earlier = [
+                m for m in self.older.get(peer, []) if m.get("msg_seqno", 0) < int(begin_seqno)
+            ]
+            return {"messages": earlier}
+        return {"messages": self.messages.get(peer, [])}
 
     async def send_text_message(self, receiver_id: int, content: str) -> bool:
         self.sent.append((int(receiver_id), content))
@@ -463,7 +490,45 @@ async def main() -> None:
     deleted = (await plugin.api_sticker_delete())["payload"]
     check(deleted["stickers"] == [], "删除后列表清空")
 
-    print("\n[15] 清理")
+    print("\n[15] 上翻加载更早的消息")
+    first_page = await plugin.svc.load_history(PAGED, 2)
+    check(len(first_page) == 2, "首屏拉到最新两条")
+    head = first_page[0]
+
+    older, has_more = await plugin.svc.load_older(PAGED, head["ts"], head["id"], 2)
+    check(len(older) == 2, "本地不够时按 seqno 从远端补一页")
+    check(older[-1]["ts"] < head["ts"], "补回来的都是更早的消息")
+    check(has_more is True, "远端还有更早的")
+    check(older[-1]["ts"] == 1700000350, "补回来的顺序按时间升序")
+
+    older2, has_more2 = await plugin.svc.load_older(
+        PAGED, older[0]["ts"], older[0]["id"], 2
+    )
+    check(has_more2 is False, "远端没有更多时停止上翻")
+    check(all(m["ts"] < older[0]["ts"] for m in older2), "不会重复返回已加载的消息")
+
+    # 再翻一次不应该凭空多出消息（防重复 / 防死循环）
+    _, has_more3 = await plugin.svc.load_older(
+        PAGED, older[0]["ts"], older[0]["id"], 2
+    )
+    check(has_more3 is False, "到底后重复上翻仍是 False")
+
+    # 全部加载后总量应是 2(首屏)+2(更早)，没有重复
+    total = plugin.svc.store.messages_of(PAGED, 100)
+    check(len(total) == 4, "翻页没有产生重复记录")
+    check([m["ts"] for m in total] == sorted(m["ts"] for m in total), "整体按时间升序")
+
+    print("\n[16] 元数据与弹窗补丁自检")
+    meta = (ROOT / "metadata.yaml").read_text(encoding="utf-8")
+    check(
+        any(f"category: {key}" in meta for key in
+            ("ai_tools", "entertainment", "productivity", "integrations", "utilities", "other")),
+        "metadata 的 category 用了平台认的英文 key",
+    )
+    patch = plugin.svc.popup_patch_state()
+    check(isinstance(patch, dict) and "patched" in patch, "弹窗补丁自检不抛异常")
+
+    print("\n[17] 清理")
     await plugin.terminate()
     check(True, "terminate 不抛异常")
 

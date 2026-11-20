@@ -216,12 +216,45 @@ class Store:
             return removed
 
     def messages_of(self, peer_uid: int, limit: int = 100) -> list[dict]:
+        # 按时间排：上翻补进来的老消息 id 更大，不能拿 id 当先后
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM messages WHERE peer_uid=? ORDER BY id DESC LIMIT ?",
+                "SELECT * FROM messages WHERE peer_uid=?"
+                " ORDER BY ts DESC, id DESC LIMIT ?",
                 (peer_uid, limit),
             ).fetchall()
         return [self._row(r) for r in reversed(rows)]
+
+    def messages_before(
+        self,
+        peer_uid: int,
+        before_ts: int,
+        before_id: int,
+        limit: int = 100,
+    ) -> list[dict]:
+        """取严格早于 (before_ts, before_id) 的最近 limit 条（升序），用于上翻历史。
+
+        用 (ts, id) 复合游标而不是单看 id：补拉进来的历史消息 id 更大但时间更早。
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM messages WHERE peer_uid=?"
+                " AND (ts<? OR (ts=? AND id<?))"
+                " ORDER BY ts DESC, id DESC LIMIT ?",
+                (peer_uid, int(before_ts), int(before_ts), int(before_id), int(limit)),
+            ).fetchall()
+        return [self._row(r) for r in reversed(rows)]
+
+    def oldest_remote_message(self, peer_uid: int) -> dict | None:
+        """本地库里最早的一条「服务器来的」消息，用来上翻时拿 seqno 游标。"""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM messages WHERE peer_uid=?"
+                " AND msg_key NOT LIKE 'local-out-%' AND raw IS NOT NULL"
+                " ORDER BY ts ASC, id ASC LIMIT 1",
+                (peer_uid,),
+            ).fetchone()
+        return self._row(row) if row else None
 
     # ---------- 会话 ----------
     def upsert_session(

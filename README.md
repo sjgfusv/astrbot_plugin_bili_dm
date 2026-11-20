@@ -8,6 +8,7 @@ B 站私信的 **AstrBot 面板插件**。
 **特性**
 
 - 多会话列表 + 历史消息 + 实时新消息，打开就停在最新一条
+- 往上滚到顶会自动加载更早的历史，位置不跳
 - 文本私信、B 站表情、本地图片表情（jpg / gif / png …）
 - 视频分享显示成 B 站官方样式卡片，点击打开视频
 - 跟随 [AstrBot 调色盘](https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_palette)：卡片完全透明、壁纸原样透出、主色联动
@@ -216,26 +217,30 @@ bili-dm/                           ← 仓库根目录就是插件目录
 ├── core/                          # store / config / user / emotes / stickers / palette …
 ├── views/panel/                   # 前端（原生 HTML/CSS/JS）
 ├── .astrbot-plugin/i18n/          # 视图标题
+├── .github/workflows/ci.yml       # 推送时跑测试
 ├── requirements.txt               # 插件依赖（只有 httpx）
 ├── tools/                         # 独立运行 + 开发工具，不参与插件加载
 │   ├── local/                     # 独立运行服务（FastAPI + OneBot 11）
 │   ├── cli.py / run.py            # 独立运行入口
-│   ├── tests/                     # 冒烟测试（含 AstrBot API 桩）
+│   ├── tests/                     # 冒烟测试（含 AstrBot API 桩）+ 元数据校验
 │   ├── _bootstrap.py              # 让 tools/ 以仓库根作为插件包名导入
 │   ├── sync_to_astrbot.py         # 开发用：源码同步到 AstrBot 插件目录
 │   ├── patch_astrbot_popups.py    # 可选：给插件 iframe 加 allow-popups
 │   ├── requirements-standalone.txt
 │   └── preview*.png               # 界面预览图
-└── HANDOFF.md                     # 交接文档
 ```
 
 ## 开发 / 自测
 
 ```bash
-python tools/tests/smoke_plugin.py     # 79 项：桥接、会话、发送、调色盘、表情、时间戳兼容、实时图片、SSE …
+python tools/tests/smoke_plugin.py     # 91 项：桥接、会话、发送、调色盘、表情、上翻历史、时间戳兼容、实时图片、SSE …
+python tools/tests/check_version.py    # 两处版本号一致 + 插件市场分类 key 合法
 python tools/run.py serve --demo       # 独立模式预览界面（假数据）
 node --check views/panel/app.js        # 前端改动后检查语法
 ```
+
+推送到 main 或开 PR 时 GitHub Actions 会跑同一套检查（`.github/workflows/ci.yml`），
+所以本地过不了的基本也进不了仓库。
 
 `tools/tests/fake_astrbot/` 是按 AstrBot 4.29.4 源码复刻的最小 API 桩，不联网、不碰真实数据目录。
 `tools/_bootstrap.py` 把仓库根目录注册成 `astrbot_plugin_bili_dm` 包，所以源码里不用为本地运行改导入路径。

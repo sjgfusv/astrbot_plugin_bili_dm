@@ -7,7 +7,8 @@ desc: >-
   支持文本私信、B 站表情与本地图片表情、视频分享卡片、跟着调色盘变色的玻璃质感界面；
   打开自动定位最新消息，实时来消息像官方聊天一样平滑滚动。显示范围可在面板设置里
   切换「所有会话 / 只看指定的人」。另附不依赖 AstrBot 的独立运行模式。
-version: v0.4.3
+version: v0.4.4
+category: entertainment
 author: sjgfusv
 repo: "https://github.com/sjgfusv/astrbot_plugin_bili_dm"
 astrbot_version: ">=4.29.0"

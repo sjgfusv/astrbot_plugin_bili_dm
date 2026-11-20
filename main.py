@@ -38,7 +38,7 @@ def plugin_data_dir() -> Path:
     PLUGIN_NAME,
     "bili-dm",
     "B 站私信面板：复用现有 bilibili 适配器，在 WebUI 里查看和回复私信",
-    "0.4.3",
+    "0.4.4",
 )
 class BiliDmPanelPlugin(Star):
     def __init__(self, context: Context) -> None:
@@ -145,17 +145,28 @@ class BiliDmPanelPlugin(Star):
     async def api_messages(self):
         peer = request.query.get("peer", 0, type=int)
         limit = request.query.get("limit", 50, type=int)
+        before_id = request.query.get("before_id", 0, type=int)
+        before_ts = request.query.get("before_ts", 0, type=int)
         if not peer:
             return error_response("缺少 peer 参数", status_code=400)
         if not self.svc._visible(peer):
             return error_response("当前设置为只显示指定的人", status_code=403)
         try:
-            messages = await self.svc.load_history(peer, limit)
+            if before_id:
+                messages, has_more = await self.svc.load_older(
+                    peer, before_ts, before_id, limit
+                )
+            else:
+                messages = await self.svc.load_history(peer, limit)
+                # 首屏：返回条数顶到上限就认为上面还有，滚动到顶会继续要
+                size = max(5, min(int(limit), 100))
+                has_more = len(messages) >= size
         except RuntimeError as exc:
             return error_response(str(exc), status_code=400)
         return json_response(
             {
                 "messages": messages,
+                "has_more": bool(has_more),
                 "peer": {
                     "uid": peer,
                     "name": (self.svc.store.get_session(peer) or {}).get("name", ""),

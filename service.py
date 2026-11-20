@@ -7,6 +7,7 @@ import base64
 import contextlib
 import json
 import time
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from astrbot.api import logger
@@ -127,11 +128,45 @@ class PanelService:
             },
             "adapter": bridge.describe(adapter) if adapter else {"found": False},
             "palette": self.palette_dict(),
+            "popup_patch": self.popup_patch_state(),
             "astrbot": {
                 "platform_name": "bilibili",
                 "adapter_display": (bridge.describe(adapter).get("display") if adapter else ""),
             },
         }
+
+    def popup_patch_state(self) -> dict:
+        """检查 AstrBot 插件视图 iframe 的 allow-popups 补丁是否还在。
+
+        AstrBot 升级会覆盖 dashboard/dist，补丁失效后表现为「点视频卡片没反应」
+        且没有任何报错，所以给前端一个明确提示。结果缓存 60 秒，读盘不频繁。
+        """
+        cached = getattr(self, "_patch_cache", None)
+        now = time.time()
+        if cached and now - cached[0] < 60:
+            return cached[1]
+        result = {"required": False, "patched": True, "reason": "standalone"}
+        try:
+            import astrbot as _astrbot
+
+            assets = (
+                Path(_astrbot.__file__).resolve().parent / "dashboard" / "dist" / "assets"
+            )
+            files = sorted(assets.glob("PluginViewPage-*.js"))
+            if files:
+                patched = any(
+                    "allow-popups" in f.read_text(encoding="utf-8", errors="ignore")
+                    for f in files
+                )
+                result = {
+                    "required": True,
+                    "patched": patched,
+                    "reason": "" if patched else "unpatched",
+                }
+        except Exception as exc:  # 检测失败不该影响面板
+            logger.debug(f"[bili_dm] 检查弹窗补丁失败: {exc}")
+        self._patch_cache = (now, result)
+        return result
 
     def palette_dict(self) -> dict:
         """调色盘状态。读盘失败只降级，绝不影响面板主流程。"""
@@ -294,23 +329,12 @@ class PanelService:
         return int(peer) == int(self.cfg.peer_uid or 0)
 
     # ---------------- 历史消息 ----------------
-    async def load_history(self, peer: int, limit: int = 50) -> list[dict]:
-        client = self.client
-        if client is None:
-            raise RuntimeError("B 站适配器还没就绪，先在「消息平台」里确认它已启用")
-        if not peer:
-            raise RuntimeError("缺少 peer 参数")
+    def _ingest(self, peer: int, raw_list: list) -> tuple[list[dict], list[dict]]:
+        """把一批 B 站原始私信解析后写库。
 
-        size = max(5, min(int(limit), 100))
-        data = await client.get_messages(peer, 1, 0, size=size)
-        self.last_sync = time.time()
-        if not data:
-            self.last_error = "拉取历史失败（接口无返回）"
-            return self.store.messages_of(peer, size)
-
-        raw_list = data.get("messages") or []
-        if isinstance(raw_list, dict):
-            raw_list = raw_list.get("messages") or []
+        返回 (解析结果[升序], 真正新入库的那部分)。
+        只做落库，不动会话摘要/未读——上翻老消息时不能把这些改成旧的。
+        """
         my_uid = self.my_uid()
         parsed = []
         for raw in raw_list:
@@ -319,7 +343,7 @@ class PanelService:
                 parsed.append(item)
         parsed.sort(key=lambda x: (x["ts"], x["msg_key"]))
 
-        self.last_error = ""
+        fresh = []
         for item in parsed:
             # 本地发送时先插了一条占位消息，这里认领成服务器那条，不再重复插入
             if (
@@ -340,9 +364,46 @@ class PanelService:
                 msg_key=item["msg_key"] or None,
                 raw=item["raw"],
             )
-            if saved and item["direction"] == "in":
-                self.store.bump_session(peer, item["text"], item["ts"], unread=False)
+            if saved:
+                fresh.append(item)
+        return parsed, fresh
 
+    @staticmethod
+    def _seqno_of(msg: dict | None) -> int:
+        """从入库的原始数据里取 B 站私信游标 msg_seqno（上翻用）。"""
+        if not msg:
+            return 0
+        raw = msg.get("raw") or {}
+        if not isinstance(raw, dict):
+            return 0
+        try:
+            return int(raw.get("msg_seqno") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    async def load_history(self, peer: int, limit: int = 50) -> list[dict]:
+        client = self.client
+        if client is None:
+            raise RuntimeError("B 站适配器还没就绪，先在「消息平台」里确认它已启用")
+        if not peer:
+            raise RuntimeError("缺少 peer 参数")
+
+        size = max(5, min(int(limit), 100))
+        data = await client.get_messages(peer, 1, 0, size=size)
+        self.last_sync = time.time()
+        if not data:
+            self.last_error = "拉取历史失败（接口无返回）"
+            return self.store.messages_of(peer, size)
+
+        raw_list = data.get("messages") or []
+        if isinstance(raw_list, dict):
+            raw_list = raw_list.get("messages") or []
+        parsed, fresh = self._ingest(peer, raw_list)
+
+        self.last_error = ""
+        for item in fresh:
+            if item["direction"] == "in":
+                self.store.bump_session(peer, item["text"], item["ts"], unread=False)
         if parsed:
             last = parsed[-1]
             self.store.upsert_session(
@@ -350,6 +411,46 @@ class PanelService:
             )
         self._spawn_profile(peer)
         return self.store.messages_of(peer, size)
+
+    async def load_older(
+        self, peer: int, before_ts: int, before_id: int, limit: int = 60
+    ) -> tuple[list[dict], bool]:
+        """上翻历史：优先吃本地库，本地不够再按 seqno 游标往前问 B 站。
+
+        before_ts / before_id 是当前已加载的最早那条消息，返回 (消息列表[升序], 是否还有更早的)。
+        """
+        if not peer:
+            raise RuntimeError("缺少 peer 参数")
+        size = max(5, min(int(limit), 100))
+        local = self.store.messages_before(peer, before_ts, before_id, size)
+        if len(local) >= size:
+            return local, True
+
+        oldest = self.store.oldest_remote_message(peer)
+        seqno = self._seqno_of(oldest)
+        client = self.client
+        if seqno <= 0 or client is None:
+            return local, False
+
+        try:
+            data = await client.get_messages(peer, 1, seqno, size=size)
+        except Exception as exc:  # 上翻失败不该打断聊天
+            logger.warning(f"[bili_dm] 上翻历史失败: {exc}")
+            return local, False
+        if not data:
+            return local, False
+
+        raw_list = data.get("messages") or []
+        if isinstance(raw_list, dict):
+            raw_list = raw_list.get("messages") or []
+        if not raw_list:
+            return local, False
+
+        self._ingest(peer, raw_list)
+        merged = self.store.messages_before(peer, before_ts, before_id, size)
+        # 远端这一批都没带来新东西，说明真的到头了
+        has_more = len(merged) > len(local) or len(raw_list) >= size
+        return merged, has_more
 
     async def _load_share_card(self, peer: int) -> None:
         """分享消息补拉历史：封面/标题/链接只在原始消息里有。"""

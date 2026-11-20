@@ -140,10 +140,60 @@ def create_app(rt: BiliRuntime, host: str, port: int) -> FastAPI:
         return {"sessions": items, "scope": "single", "peer_uid": cfg.peer_uid}
 
     @app.get("/api/messages")
-    async def api_messages(peer: int = 0, limit: int = 60, before_id: int | None = None) -> dict:
+    async def api_messages(
+        peer: int = 0,
+        limit: int = 60,
+        before_id: int = 0,
+        before_ts: int = 0,
+    ) -> dict:
         uid = int(peer or cfg.peer_uid or 0)
+        if not uid:
+            return {
+                "messages": [],
+                "has_more": False,
+                "peer": {"uid": 0, "name": ""},
+                "me": {"uid": cfg.my_uid, "name": cfg.my_name, "face": cfg.my_face},
+            }
+        size = max(5, min(int(limit), 100))
+        if not before_id:
+            return {
+                "messages": rt.store.messages_of(uid, size),
+                # 保守地认为还有；滚到顶时会真的来问一次，没有就变 False
+                "has_more": True,
+                "peer": rt.peer_card(),
+                "me": {"uid": cfg.my_uid, "name": cfg.my_name, "face": cfg.my_face},
+            }
+
+        # 上翻：先吃本地，不够再按 msg_seqno 往前问 B 站
+        local = rt.store.messages_before(uid, before_ts, before_id, size)
+        has_more = len(local) >= size
+        if len(local) < size:
+            oldest = rt.store.oldest_remote_message(uid)
+            raw = (oldest or {}).get("raw") or {}
+            seqno = int(raw.get("msg_seqno") or 0) if isinstance(raw, dict) else 0
+            client = getattr(rt.poller, "client", None)
+            if seqno > 0 and client is not None:
+                try:
+                    older = await client.fetch_msgs(uid, size=size, begin_seqno=seqno)
+                except BiliError:
+                    older = []
+                for m in older:
+                    rt.store.add_message(
+                        peer_uid=m["peer_uid"],
+                        sender_uid=m["sender_uid"],
+                        direction=m["direction"],
+                        ts=m["ts"],
+                        kind=m["kind"],
+                        text=m["text"],
+                        msg_key=m["msg_key"] or None,
+                        raw=m.get("raw"),
+                    )
+                merged = rt.store.messages_before(uid, before_ts, before_id, size)
+                has_more = len(merged) > len(local) or len(older) >= size
+                local = merged
         return {
-            "messages": rt.store.messages_of(uid, min(limit, 500)) if uid else [],
+            "messages": local,
+            "has_more": has_more,
             "peer": rt.peer_card() if uid else {"uid": 0, "name": ""},
             "me": {"uid": cfg.my_uid, "name": cfg.my_name, "face": cfg.my_face},
         }

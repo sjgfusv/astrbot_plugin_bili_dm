@@ -19,6 +19,9 @@ const S = {
   busy: false,
   palette: null,
   atBottom: true,
+  hasMore: false,
+  loadingOlder: false,
+  olderChain: 0,
   emotes: null,
   emoteMap: null,
 };
@@ -225,12 +228,18 @@ function renderState(payload) {
   }
 
   const banner = $("banner");
+  const patch = payload.popup_patch || {};
   if (!ad.found) {
     banner.hidden = false;
     banner.textContent = "没有可用的 B 站私信适配器。先在 AstrBot 的「配置 → 消息平台」里启用 bilibili，再回到这里刷新。";
   } else if (!ad.ready) {
     banner.hidden = false;
     banner.textContent = "适配器已加载但客户端还没就绪，等几秒点「刷新会话」。";
+  } else if (patch.required && !patch.patched) {
+    // AstrBot 升级会覆盖 dist，补丁失效后点视频卡片没有任何反应，这里明说原因
+    banner.hidden = false;
+    banner.textContent =
+      "视频卡片点击可能没反应：AstrBot 升级覆盖了 iframe 白名单补丁。运行 python tools/patch_astrbot_popups.py 后 Ctrl+F5 强刷即可。";
   } else {
     banner.hidden = true;
   }
@@ -494,6 +503,15 @@ function renderMessages(toBottom = false) {
 
 function syncMessages(list) {
   const thread = $("thread");
+  // 上翻加载过的更早消息要留住：列表只覆盖最新一页，把更早的部分拼回去。
+  // 比的是 (ts, id) 而不是 id —— 补拉进来的老消息 id 反而更大。
+  const firstNew = list.length ? list[0] : null;
+  const isOlder = (m) =>
+    firstNew &&
+    (m.ts < firstNew.ts || (m.ts === firstNew.ts && m.id < firstNew.id));
+  const older = firstNew ? S.messages.filter(isOlder) : [];
+  if (older.length) list = older.concat(list);
+
   const newIds = list.map((m) => m.id);
   const prefixMatch =
     S.ids.length > 0 &&
@@ -532,6 +550,9 @@ async function openSession(peer) {
   S.active = Number(peer);
   S.messages = [];
   S.ids = [];
+  S.hasMore = false;
+  S.loadingOlder = false;
+  S.olderChain = 0;
   renderSessions();
 
   const sess = currentSession();
@@ -552,6 +573,7 @@ async function loadMessages(silent = false) {
   try {
     const data = await Api.get("messages", { peer: S.active, limit: 60 });
     syncMessages(data.messages || []);
+    S.hasMore = !!data.has_more;
     const sess = currentSession();
     if (sess && data.peer && data.peer.name && !sess.name) {
       sess.name = data.peer.name;
@@ -563,6 +585,66 @@ async function loadMessages(silent = false) {
     if (!silent) $("sendError").textContent = err.message;
     log("err", err.message);
   }
+}
+
+/* 滚到顶部时往前翻一页。重绘后把滚动条按「新增高度」下推，视觉位置不跳。 */
+async function loadOlder() {
+  if (!S.active || S.loadingOlder || !S.hasMore) return;
+  const first = S.messages[0];
+  if (!first) return;
+  const thread = $("thread");
+  S.loadingOlder = true;
+
+  const hint = document.createElement("div");
+  hint.className = "older-hint";
+  hint.textContent = "正在加载更早的消息…";
+  thread.prepend(hint);
+
+  const prevHeight = thread.scrollHeight;
+  const prevTop = thread.scrollTop;
+  try {
+    const data = await Api.get("messages", {
+      peer: S.active,
+      limit: 60,
+      before_id: first.id,
+      before_ts: first.ts,
+    });
+    S.hasMore = !!data.has_more;
+    const older = data.messages || [];
+    const known = new Set(S.ids);
+    const fresh = older.filter((m) => !known.has(m.id));
+    safeRemove(hint);
+    // 后端说有更多却没给新东西，说明到底了；继续问会变成死循环
+    if (!fresh.length) {
+      S.hasMore = false;
+      return;
+    }
+    S.messages = fresh.concat(S.messages);
+    renderMessages(false);
+    // 两帧：图片异步撑高后可能还要再补一次
+    const align = () => {
+      thread.scrollTop = prevTop + (thread.scrollHeight - prevHeight);
+    };
+    align();
+    requestAnimationFrame(() => {
+      align();
+      // 内容还不足一屏时滚不动，也就不会有下一次 scroll 事件，这里主动续一页
+      const short = thread.scrollHeight <= thread.clientHeight + 80;
+      if (short && S.hasMore && S.olderChain < 5) {
+        S.olderChain += 1;
+        loadOlder();
+      }
+    });
+  } catch (err) {
+    safeRemove(hint);
+    log("err", err.message);
+  } finally {
+    S.loadingOlder = false;
+  }
+}
+
+function safeRemove(el) {
+  if (el && el.parentNode) el.parentNode.removeChild(el);
 }
 
 async function markRead() {
@@ -940,6 +1022,8 @@ function bind() {
     () => {
       const t = $("thread");
       S.atBottom = t.scrollHeight - t.scrollTop - t.clientHeight < 120;
+      // 快贴到顶了就把更早的一页要来
+      if (t.scrollTop < 80 && S.hasMore && !S.loadingOlder) loadOlder();
     },
     { passive: true }
   );
